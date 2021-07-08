@@ -37,7 +37,7 @@ LINKER= g++
 
 # Add -static flag to make the exe portable
 flood-fill: $(obj)
-	$(LINKER) $^ -o $@ $(LDFLAGS)
+	$(LINKER) $^ -o $@ $(LDFLAGS) -static
 
 release:
 	@grep -q $@ .make-switch 2> /dev/null \

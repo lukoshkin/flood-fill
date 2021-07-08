@@ -56,17 +56,25 @@ int main(int argc, char * argv[]) {
   std::cout << "Wall identifier (available range is 0-255): ";
   std::cout << (unsigned)(uint8_t)wall << std::endl;
   std::cout << "Specified dimensions are";
-  std::cout << " x:" << Nx << " y:" << Ny << " z:" << Nz << std::endl;
+  std::cout << " x:" << Nx << " y:" << Ny << " z:" << Nz;
+  std::cout << '\n' << std::endl;
+
+
+  uint8_t * data = new uint8_t[Nx*Ny*Nz];
+
+  std::ifstream fh(fname);
+  assert(fh.is_open());
+
+  char buf;
+  for (uint i=0; fh.read(&buf, sizeof(char)); ++i) data[i] = (uint8_t)buf;
+  fh.close();
 
   Flood f(
       Nx, Ny, Nz,
-      NULL, fname,
-      wall, connectivity);
-
+      data, "", wall, connectivity);
 
   f.checkConnectivity(dir);
-  uint8_t * array = new uint8_t[Nx*Ny*Nz];
-  f.selectFlowCavity(array, 0);
+  f.selectFlowCavity(data, 0);
   f.stats(0, true);
 
 
@@ -76,8 +84,9 @@ int main(int argc, char * argv[]) {
   newp += "_1c" + char_dir[dir] + p.extension().string();
 
   std::ofstream fp(p.parent_path()/newp, std::ios::binary);
-  fp.write((const char*)array, Nx*Ny*Nz);
+  fp.write((const char*)data, Nx*Ny*Nz);
   fp.close();
 
-  delete[] array;
+  std::cout << "\nSaved to " << newp << std::endl;
+  delete[] data;
 }

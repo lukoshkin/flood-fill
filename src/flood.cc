@@ -273,14 +273,21 @@ void Flood::selectFlowCavity(uint8_t * array, uint kth/*=0*/) {
  * @full - whether to print the total number of pores.
  */
 void Flood::stats(uint kth, bool full/*=false*/) {
+  std::cout.precision(4);
   if (full) {
     std::cout << "total # of pores: ";
     std::cout << pad_pore_ids.size() << '\n';
+    std::cout << "Porosity = ";
+    std::cout << 100*(float)pad_pore_ids.size() / N;
+    std::cout << "%\n";
   }
 
   if (!flow_cavities.empty()) {
     std::cout << "# of pores in the " << kth <<  " cavity: ";
-    std::cout << flow_cavities[kth].size() << std::endl;
+    std::cout << flow_cavities[kth].size() << '\n';
+    std::cout << "Truncated sample porosity = ";
+    std::cout << 100*(float)flow_cavities[kth].size() / N;
+    std::cout << '%' << std::endl;
   }
 }
 
