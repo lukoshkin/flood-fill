@@ -21,7 +21,7 @@ uint flatIndex(int x, int y, int z, uint bx, uint by, uint cell_id/*=0*/) {
 
 /**
  * Converts array id from 1D to cubic representation.
- * 
+ *
  * @param idx - target id which to convert in 3D representation.
  * @param b - size of a cube side.
  */

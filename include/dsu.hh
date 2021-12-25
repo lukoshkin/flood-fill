@@ -9,26 +9,47 @@
 #define __DSU_HH
 
 #include <unordered_map>
+#include <boost/archive/text_oarchive.hpp>
+#include <boost/archive/text_iarchive.hpp>
+#include <boost/serialization/unordered_map.hpp>
 
 
-struct Node {
-  uint data;
-  Node * parent;
-  uint rank;
+class Node {
+    uint data;
+    uint rank;
+    Node * parent;
 
-  Node(uint);
+  public:
+    Node();
+    Node(uint);
+
+  private:
+    friend class DSU;
+    friend class Flood;
+    friend class boost::serialization::access;
+    template <class Archive>
+    void serialize(Archive & ar, unsigned) {
+      ar & data;
+      ar & rank;
+      ar & parent;
+  }
 };
 
 
 class DSU {
   std::unordered_map<uint, Node*> map;
 
+  friend class boost::serialization::access;
+  template <class Archive>
+  void serialize(Archive & ar, unsigned) { ar & map; }
+
 public:
   ~DSU();
   void makeSet(uint);
-  uint findSet(uint);
+  Node * findSet(uint);
   Node * findSet(Node *);
   void unionSets(uint, uint);
+  void changeParent(uint, uint);
 };
 
 #endif

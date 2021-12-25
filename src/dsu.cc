@@ -8,6 +8,13 @@ Node::Node(uint _data) {
   rank = 0;
 }
 
+Node::Node() {
+  data = 0;
+  parent = this;
+  rank = 0;
+}
+
+
 DSU::~DSU() {
   for (auto it: map) delete it.second;
 }
@@ -17,13 +24,17 @@ void DSU::makeSet(uint data) {
   map.emplace(data, node);
 }
 
-uint DSU::findSet(uint data) {
-  return findSet(map[data])->data;
-}
-
 Node * DSU::findSet(Node * node) {
   if (node->parent == node) return node;
   return node->parent = findSet(node->parent);
+}
+
+Node * DSU::findSet(uint data) {
+  return findSet(map[data]);
+}
+
+void DSU::changeParent(uint data, uint external_node_data) {
+  findSet(data)->data = external_node_data;
 }
 
 void DSU::unionSets(uint data1, uint data2) {
@@ -39,3 +50,4 @@ void DSU::unionSets(uint data1, uint data2) {
     if (node1->rank == node2->rank) ++node1->rank;
   }
 }
+

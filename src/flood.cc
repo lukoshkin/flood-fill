@@ -1,9 +1,8 @@
 #include <fstream>
 #include <iostream>
 
-#include <cmath>
 #include <cassert>
-#include <unordered_set>
+#include <cmath>
 #include <set>
 
 #include "../include/flood.hh"
@@ -14,17 +13,17 @@
  * in the chosen flow direction (3D task).
  *
  * @param dimAlpha - size of dim Alpha (where Alpha = {x,y,z})
- * @param[in] array - input data in uint8_t format.
+ * @param[in] array - input data in char format.
  * @param file - name of a binary file with segmented pores.
  * @param wall_id - value of wall identifier in the input data.
  * @param connectivity - type of pores connectivity.
  */
 Flood::Flood(
     uint dimx, uint dimy, uint dimz,
-    uint8_t * array/*=NULL*/, std::string file/*=""*/,
+    char * array/* = NULL*/, std::string file/* = ""*/,
 
-    uint8_t wall_id/*=255*/,
-    std::string connectivity/*="face"*/) {
+    uint8_t wall_id/* = 255*/,
+    std::string connectivity/* = "face"*/, uint offset_z/* = 0*/) {
 
   assert(dimx > 0);
   assert(dimy > 0);
@@ -33,24 +32,25 @@ Flood::Flood(
   if (connectivity == "face")
     preceding_neighbor_positions = {4,10,12};
   else if (connectivity == "edge")
-    preceding_neighbor_positions = {1,3,4,5,7,10,12};
+    preceding_neighbor_positions = {1,3,4,5,7,9,10,11,12};
   else if (connectivity == "vertex")
     preceding_neighbor_positions = {0,1,2,3,4,5,6,7,8,9,10,11,12};
   else throw std::invalid_argument(
       "possible values are: vertex, edge or face");
-
-  dsets = DSU();
 
   Nx = dimx;
   Ny = dimy;
   Nz = dimz;
   wall = wall_id;
 
-  N = Nx*Ny*Nz;
-  uint Np = (Nx+1)*(Ny+1)*(Nz+1);
+  dsets = DSU();
+  pad_offset = (Nx+1) * (Ny+1) * offset_z;
+
+  N = Nx * Ny * Nz;
+  uint Np = (Nx+1) * (Ny+1) * (Nz+1);
 
   data = new uint8_t[Np];
-  for (uint i=0; i<Np; ++i) data[i] = wall;
+  for (uint i = 0; i < Np; ++i) data[i] = wall;
 
   if (array != NULL) _copyData(array);
   else if (!file.empty()) _readData(file);
@@ -63,7 +63,7 @@ Flood::~Flood() {
 }
 
 /**
- * Reads binary data from a raw file.
+ * Read binary data from a raw file.
  *
  * @param file - file name.
  */
@@ -72,32 +72,32 @@ void Flood::_readData(std::string file) {
   assert(fp.is_open());
 
   char buf;
-  for (uint cid=0; fp.read(&buf, sizeof(char)); ++cid) {
-    uint pcid = I2pI(cid);
+  for (uint i = 0; fp.read(&buf, sizeof(char)); ++i) {
+    uint pcid = I2pI(i);
     data[pcid] = (uint8_t)buf;
     if (data[pcid] != wall)
-      pad_pore_ids.push_back(pcid);
+      pad_pore_ids.push_back(pcid + pad_offset);
   }
   fp.close();
 }
 
 /**
- * Copies data from an array.
+ * Copy data from an array.
  *
- * @param array - uint8_t array representing input data
+ * @param array - char array representing input data
  */
-void Flood::_copyData(uint8_t * array) {
-  for (uint i=0; i<N; ++i) {
-    uint cid = I2pI(i);
-    data[cid] = array[i];
-    if (array[i] != wall)
-      pad_pore_ids.push_back(cid);
+void Flood::_copyData(char * array) {
+  for (uint i = 0; i < N; ++i) {
+    uint pcid = I2pI(i);
+    data[pcid] = (uint8_t)array[i];
+    if (data[pcid] != wall) {
+      pad_pore_ids.push_back(pcid + pad_offset);
+    }
   }
 }
 
-
 /**
- * Maps indices in original and padded arrays.
+ * Map indices in original and padded arrays.
  *
  * @param cell_id - id of a cell in the original array.
  * @return The index in the padded array.
@@ -108,7 +108,7 @@ uint Flood::I2pI(uint cell_id) {
 }
 
 /**
- * Maps indices in original and padded arrays (opposite direction).
+ * Map indices in original and padded arrays (opposite direction).
  *
  * @param cell_id - id of a cell in the padded array.
  * @return The index in the original array.
@@ -119,7 +119,7 @@ uint Flood::pI2I(uint cell_id) {
 }
 
 /**
- * Finds preceding neighbor cell index in the padded array
+ * Find preceding neighbor cell index in the padded array
  * by its relative position to the target cell.
  *
  * @param pad_cell_id - index of the target cell in the padded array @see data.
@@ -132,32 +132,52 @@ uint Flood::precedingNeighborPadId(uint pad_cell_id, uint pos) {
 }
 
 /**
- * Fills cavities with different colors.
- * Logs ids of segmented pores to "cavities.bin".
+ * Fill cavities with different colors.
  */
-void Flood::_colorFillDSU() {
-  for (uint ppid: pad_pore_ids) {
+void Flood::colorFillDSU() {
+  for (uint ppid : pad_pore_ids) {
     dsets.makeSet(ppid);
 
-    for (uint pos: preceding_neighbor_positions) {
+    for (uint pos : preceding_neighbor_positions) {
       uint pnpid = precedingNeighborPadId(ppid, pos);
-      if (data[pnpid] != wall) dsets.unionSets(ppid, pnpid);
+      if (data[pnpid - pad_offset] != wall)
+        dsets.unionSets(ppid, pnpid);
     }
   }
-  for (uint ppid: pad_pore_ids)
-    cavities[dsets.findSet(ppid)].push_back(pI2I(ppid));
 }
 
 /**
- * Compares colors of pores on the bottom and top faces,
- * selecting common ones and logging them to "target_pores.bin".
+ *
  */
-using unord_set = std::unordered_set<uint>;
-void Flood::_flowDirColors(uint flow_dir) {
-  assert(!cavities.empty());
+std::vector<uint> Flood::topFaceColors () {
+  std::vector<uint> top_face_colors;
+  uint startId = (Nx+1)*(Ny+1)*(Nz-1) + pad_offset;
+  for (auto i = pad_pore_ids.rbegin(); *i >= startId; ++i)
+    top_face_colors.push_back(dsets.findSet(*i)->data);
+
+  return top_face_colors;
+}
+
+/**
+ * Set parents of pores from external DSU to those of `this->dsets`.
+ */
+void Flood::linkToPrevDSU(std::vector<uint> top_face_colors) {
+  uint j(0);
+  uint stopId = (Nx+1)*(Ny+1) + pad_offset;
+  for (auto i = pad_pore_ids.begin(); *i < stopId; ++i)
+    dsets.changeParent(*i, top_face_colors[j++]);
+}
+
+/**
+ * Returns pore colors on the specified with `ax` and `dir` face.
+ */
+std::unordered_set<uint>
+Flood::faceColors(uint ax, uint dir) {
+  assert(ax < 3);
+  assert(dir < 2);
   std::vector<uint> I, DIM;
 
-  switch (flow_dir) {
+  switch (ax) {
     case 0:
       I = {0, 1, 2};
       DIM = {Nx+1, Ny+1, Nz+1};
@@ -170,98 +190,64 @@ void Flood::_flowDirColors(uint flow_dir) {
       I = {1, 2, 0};
       DIM = {Nz+1, Nx+1, Ny+1};
       break;
-    default:
-      throw "flow_dir takes only 0, 1, 2 values";
   }
 
-  unord_set top_face_pores;
-  unord_set bottom_face_pores;
+  uint plane_id = (dir > 0) ? DIM[0]-1 : 1;
+  std::unordered_set<uint> face_colors;
 
-  for (uint i=1; i<DIM[1]; ++i) {
-    for (uint j=1; j<DIM[2]; ++j) {
+  for (uint i = 1; i < DIM[1]; ++i) {
+    for (uint j = 1; j < DIM[2]; ++j) {
 
-      std::vector<uint> B = {1, i, j};
-      uint bottom_cell_id = flatIndex(
+      std::vector<uint> B = {plane_id, i, j};
+      uint face_cid = flatIndex(
           B[I[0]], B[I[1]], B[I[2]], Nx+1, Ny+1);
 
-      if (data[bottom_cell_id] != wall)
-        bottom_face_pores.emplace(
-          dsets.findSet(bottom_cell_id));
-
-      std::vector<uint> T = {DIM[0]-1, i, j};
-      uint top_cell_id = flatIndex(
-          T[I[0]], T[I[1]], T[I[2]], Nx+1, Ny+1);
-
-      if (data[top_cell_id] != wall)
-        top_face_pores.emplace(
-          dsets.findSet(top_cell_id));
+      if (data[face_cid] != wall) {
+        face_cid += pad_offset;
+        face_colors.emplace(dsets.findSet(face_cid)->data);
+      }
     }
   }
-  unord_set * smaller_face = &top_face_pores;
-  unord_set * bigger_face = &bottom_face_pores;
-  if (smaller_face->size() > bigger_face->size())
-    std::swap(smaller_face, bigger_face);
-
-  flow_colors.clear();
-  for (auto it=smaller_face->begin(); it!=smaller_face->end(); ++it)
-    if (bigger_face->find(*it) != bigger_face->end())
-      flow_colors.push_back(*it);
+  return face_colors;
 }
 
-/**
- * Checks the sample connectivity in the given direction
- *
- * @param flow_dir - flow direction
- */
-void Flood::checkConnectivity(uint flow_dir) {
-  _colorFillDSU();
-  _flowDirColors(flow_dir);
-  assert(!flow_colors.empty());
-}
 
 /**
- * Filter out cavities, leaving only flow ones.
- * @note The result of this function depends on the flow_dir
- * argument chosen in @see checkConnectivity function.
+ * Find colors of flow pores (that start on one face and end on another)
  */
-void Flood::screenFlowCavities() {
-  assert(!cavities.empty());
-  assert(!flow_colors.empty());
+map_of_sets Flood::flowPoreColors(
+    std::vector<std::unordered_set<uint>> faces,
+    std::vector<std::string> face_names) {
 
-  struct BiggerVecSize {
-    bool operator() (
-        const std::vector<uint>& a,
-        const std::vector<uint>& b) const {
-      return a.size() > b.size();
-    }
-  } comp;
-
-  flow_cavities.clear();
-  for (uint color: flow_colors) flow_cavities.push_back(cavities[color]);
-  std::sort(flow_cavities.begin(), flow_cavities.end(), comp);
-}
-
-/**
- * Fills the provided array with the selected flow component.
- * @note The result of this function depends on the flow_dir
- * argument chosen in @see checkConnectivity function.
- *
- * @param[out] array - where to write to connected component.
- * @param kth - number of the selected flow cavity.
- */
-void Flood::selectFlowCavity(uint8_t * array, uint kth/*=0*/) {
-  if (flow_cavities.empty()) {
-    screenFlowCavities();
-    assert(!flow_cavities.empty());
+  for (uint i = 0; i < faces.size(); ++i) {
+    for (auto & color : faces[i])
+      flow_colors[color].emplace(face_names[i]);
   }
 
-  uint CNT(0);
-  for (uint ppid: pad_pore_ids) {
-    if (CNT >= flow_cavities[kth].size()) return;
+  for (auto it = flow_colors.begin(); it != flow_colors.end();) {
+    if (it->second.size() > 1)
+      it = flow_colors.erase(it);
+    else
+      ++it;
+  }
+  return flow_colors;
+}
 
-    uint pid = pI2I(ppid);
-    if (pid >= flow_cavities[kth][CNT]) CNT++;
-    else array[pid] = wall;
+/**
+ * @param data is original array with data passed to the constructor.
+ */
+void Flood::registerFlowCavities(
+    char * data, std::optional<map_of_sets> fc /* = {} */) {
+  map_of_sets flow_colors = fc.value_or(this->flow_colors);
+
+  for (uint ppid : pad_pore_ids) {
+    uint color = dsets.findSet(ppid)->data;
+    uint pid = pI2I(ppid - pad_offset);
+
+    if (flow_colors.count(color))
+      flow_cavities[color].push_back(pid);
+    else
+      data[pid] = (char)wall;
   }
 }
 
@@ -269,10 +255,9 @@ void Flood::selectFlowCavity(uint8_t * array, uint kth/*=0*/) {
  * Prints the information about the number of pores found
  * and the size of a selected flow cavity.
  *
- * @kth - the k-th largest flow cavity.
  * @full - whether to print the total number of pores.
  */
-void Flood::stats(uint kth, bool full/*=false*/) {
+void Flood::stats(bool full/* = false*/) {
   std::cout.precision(4);
   if (full) {
     std::cout << "total # of pores: ";
@@ -282,11 +267,16 @@ void Flood::stats(uint kth, bool full/*=false*/) {
     std::cout << "%\n";
   }
 
+
   if (!flow_cavities.empty()) {
-    std::cout << "# of pores in the " << kth <<  " cavity: ";
-    std::cout << flow_cavities[kth].size() << '\n';
+    uint cnt(0);
+    for (auto & fc : flow_cavities)
+      cnt += fc.second.size();
+
+    std::cout << "# of cavities: ";
+    std::cout << flow_colors.size() << '\n';
     std::cout << "Truncated sample porosity = ";
-    std::cout << 100*(float)flow_cavities[kth].size() / N;
+    std::cout << 100*(float)cnt / N;
     std::cout << '%' << std::endl;
   }
 }

@@ -11,7 +11,7 @@ DEPFILES = $(src:src/%.cc=$(DEPDIR)/%.d)
 # include and lib files: -I$(BOOST_DIR)/include -L$(BOOST_DIR)/lib
 
 CXXFLAGS = -std=c++2a -Wall
-LDFLAGS = -lboost_program_options
+LDFLAGS = -lboost_program_options -lboost_serialization -lboost_mpi
 
 OPTFLAGS = -O3 -march=native
 DBGFLAGS = -g
@@ -31,13 +31,13 @@ else
 endif
 
 
-CXX = g++ $(CXXFLAGS)
-LINKER= g++
+CXX = mpic++ $(CXXFLAGS)
+LINKER= mpic++
 
 
 # Add -static flag to make the exe portable
 flood-fill: $(obj)
-	$(LINKER) $^ -o $@ $(LDFLAGS) -static
+	$(LINKER) $^ -o $@ $(LDFLAGS)
 
 release:
 	@grep -q $@ .make-switch 2> /dev/null \
@@ -49,7 +49,7 @@ debug:
 				 rm -rf $(OBJDIR)/* $(DEPDIR)/*; }
 
 
-$(OBJDIR)/%.o: src/%.cc $(DEPDIR)/%.d | $(DEPDIR) $(OBJDIR) 
+$(OBJDIR)/%.o: src/%.cc $(DEPDIR)/%.d | $(DEPDIR) $(OBJDIR)
 	$(CXX) $(DEPFLAGS) -c $< -o $@
 
 $(DEPDIR):
